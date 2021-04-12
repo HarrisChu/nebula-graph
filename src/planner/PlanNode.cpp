@@ -154,13 +154,13 @@ const char* PlanNode::toString(PlanNode::Kind kind) {
         case Kind::kShowEdges:
             return "ShowEdges";
         case Kind::kShowTagIndexes:
-            return "kShowTagIndexes";
+            return "ShowTagIndexes";
         case Kind::kShowEdgeIndexes:
-            return "kShowEdgeIndexes";
+            return "ShowEdgeIndexes";
         case Kind::kShowTagIndexStatus:
-            return "kShowTagIndexStatus";
+            return "ShowTagIndexStatus";
         case Kind::kShowEdgeIndexStatus:
-            return "kShowEdgeIndexStatus";
+            return "ShowEdgeIndexStatus";
         case Kind::kCreateSnapshot:
             return "CreateSnapshot";
         case Kind::kDropSnapshot:
@@ -278,6 +278,17 @@ void PlanNode::addDescription(std::string key, std::string value, PlanNodeDescri
     desc->description->emplace_back(Pair{std::move(key), std::move(value)});
 }
 
+void PlanNode::readVariable(const std::string& varname) {
+    auto varPtr = qctx_->symTable()->getVar(varname);
+    readVariable(varPtr);
+}
+
+void PlanNode::readVariable(Variable* varPtr) {
+    DCHECK(varPtr != nullptr);
+    inputVars_.emplace_back(varPtr);
+    qctx_->symTable()->readBy(varPtr->name, this);
+}
+
 void PlanNode::calcCost() {
     VLOG(1) << "unimplemented cost calculation.";
 }
@@ -312,6 +323,16 @@ std::unique_ptr<PlanNodeDescription> PlanNode::explain() const {
     return desc;
 }
 
+void PlanNode::releaseSymbols() {
+    auto symTbl = qctx_->symTable();
+    for (auto in : inputVars_) {
+        in && symTbl->deleteReadBy(in->name, this);
+    }
+    for (auto out : outputVars_) {
+        out && symTbl->deleteWrittenBy(out->name, this);
+    }
+}
+
 std::ostream& operator<<(std::ostream& os, PlanNode::Kind kind) {
     os << PlanNode::toString(kind);
     return os;
@@ -328,6 +349,15 @@ std::unique_ptr<PlanNodeDescription> SingleInputNode::explain() const {
     auto desc = SingleDependencyNode::explain();
     addDescription("inputVar", inputVar(), desc.get());
     return desc;
+}
+
+BiInputNode::BiInputNode(QueryContext* qctx, Kind kind, const PlanNode* left, const PlanNode* right)
+    : PlanNode(qctx, kind) {
+    addDep(left);
+    readVariable(left->outputVarPtr());
+
+    addDep(right);
+    readVariable(right->outputVarPtr());
 }
 
 std::unique_ptr<PlanNodeDescription> BiInputNode::explain() const {

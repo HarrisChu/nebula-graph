@@ -76,7 +76,7 @@ struct CypherClauseContextBase : AstContext {
 struct WhereClauseContext final : CypherClauseContextBase {
     WhereClauseContext() : CypherClauseContextBase(CypherClauseKind::kWhere) {}
 
-    std::unique_ptr<Expression>                  filter;
+    Expression* filter;
     std::unordered_map<std::string, AliasType>*  aliasesUsed{nullptr};
 };
 
@@ -165,7 +165,7 @@ struct NodeContext final : PatternContext {
 
     // Output fields
     ScanInfo                    scanInfo;
-    const Expression*           ids{nullptr};
+    List                        ids;
     // initialize start expression in project node
     std::unique_ptr<Expression> initialExpr;
 };

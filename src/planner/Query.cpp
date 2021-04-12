@@ -9,6 +9,7 @@
 #include <folly/String.h>
 #include <folly/dynamic.h>
 #include <folly/json.h>
+#include <thrift/lib/cpp/util/EnumUtils.h>
 
 #include "util/ToJson.h"
 
@@ -39,7 +40,7 @@ std::unique_ptr<PlanNodeDescription> GetNeighbors::explain() const {
     addDescription("src", src_ ? src_->toString() : "", desc.get());
     addDescription("edgeTypes", folly::toJson(util::toJson(edgeTypes_)), desc.get());
     addDescription("edgeDirection",
-                   storage::cpp2::_EdgeDirection_VALUES_TO_NAMES.at(edgeDirection_),
+                   apache::thrift::util::enumNameSafe(edgeDirection_),
                    desc.get());
     addDescription(
         "vertexProps", vertexProps_ ? folly::toJson(util::toJson(*vertexProps_)) : "", desc.get());
@@ -149,6 +150,17 @@ std::unique_ptr<PlanNodeDescription> IndexScan::explain() const {
     return desc;
 }
 
+Filter* Filter::clone(QueryContext* qctx) const {
+    auto newFilter = Filter::make(qctx, nullptr, nullptr, needStableFilter_);
+    newFilter->clone(*this);
+    return newFilter;
+}
+
+void Filter::clone(const Filter& f) {
+    SingleInputNode::clone(f);
+    condition_ = qctx_->objPool()->add(f.condition()->clone().release());
+}
+
 std::unique_ptr<PlanNodeDescription> Filter::explain() const {
     auto desc = SingleInputNode::explain();
     addDescription("condition", condition_ ? condition_->toString() : "", desc.get());
@@ -221,6 +233,25 @@ std::unique_ptr<PlanNodeDescription> TopN::explain() const {
     return desc;
 }
 
+Aggregate* Aggregate::clone(QueryContext* qctx) const {
+    std::vector<Expression*> newGroupKeys;
+    std::vector<Expression*> newGroupItems;
+    auto newAggregate =
+        Aggregate::make(qctx, nullptr, std::move(newGroupKeys), std::move(newGroupItems));
+    newAggregate->clone(*this);
+    return newAggregate;
+}
+
+void Aggregate::clone(const Aggregate& agg) {
+    SingleInputNode::clone(agg);
+    for (auto* expr : agg.groupKeys()) {
+        groupKeys_.emplace_back(qctx_->objPool()->add(expr->clone().release()));
+    }
+    for (auto* expr : agg.groupItems()) {
+        groupItems_.emplace_back(qctx_->objPool()->add(expr->clone().release()));
+    }
+}
+
 std::unique_ptr<PlanNodeDescription> Aggregate::explain() const {
     auto desc = SingleInputNode::explain();
     addDescription("groupKeys", folly::toJson(util::toJson(groupKeys_)), desc.get());
@@ -271,7 +302,24 @@ std::unique_ptr<PlanNodeDescription> DataCollect::explain() const {
     return desc;
 }
 
-std::unique_ptr<PlanNodeDescription> LeftJoin::explain() const {
+Join::Join(QueryContext* qctx,
+           Kind kind,
+           PlanNode* input,
+           std::pair<std::string, int64_t> leftVar,
+           std::pair<std::string, int64_t> rightVar,
+           std::vector<Expression*> hashKeys,
+           std::vector<Expression*> probeKeys)
+    : SingleDependencyNode(qctx, kind, input),
+      leftVar_(std::move(leftVar)),
+      rightVar_(std::move(rightVar)),
+      hashKeys_(std::move(hashKeys)),
+      probeKeys_(std::move(probeKeys)) {
+    inputVars_.clear();
+    readVariable(leftVar_.first);
+    readVariable(rightVar_.first);
+}
+
+std::unique_ptr<PlanNodeDescription> Join::explain() const {
     auto desc = SingleDependencyNode::explain();
     folly::dynamic inputVar = folly::dynamic::object();
     inputVar.insert("leftVar", util::toJson(leftVar_));
@@ -279,18 +327,17 @@ std::unique_ptr<PlanNodeDescription> LeftJoin::explain() const {
     addDescription("inputVar", folly::toJson(inputVar), desc.get());
     addDescription("hashKeys", folly::toJson(util::toJson(hashKeys_)), desc.get());
     addDescription("probeKeys", folly::toJson(util::toJson(probeKeys_)), desc.get());
+    return desc;
+}
+
+std::unique_ptr<PlanNodeDescription> LeftJoin::explain() const {
+    auto desc = Join::explain();
     addDescription("kind", "LeftJoin", desc.get());
     return desc;
 }
 
 std::unique_ptr<PlanNodeDescription> InnerJoin::explain() const {
-    auto desc = SingleDependencyNode::explain();
-    folly::dynamic inputVar = folly::dynamic::object();
-    inputVar.insert("leftVar", util::toJson(leftVar_));
-    inputVar.insert("rightVar", util::toJson(rightVar_));
-    addDescription("inputVar", folly::toJson(inputVar), desc.get());
-    addDescription("hashKeys", folly::toJson(util::toJson(hashKeys_)), desc.get());
-    addDescription("probeKeys", folly::toJson(util::toJson(probeKeys_)), desc.get());
+    auto desc = Join::explain();
     addDescription("kind", "InnerJoin", desc.get());
     return desc;
 }

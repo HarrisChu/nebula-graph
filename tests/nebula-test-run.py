@@ -40,15 +40,24 @@ def init_parser():
                           dest='cmd',
                           default='',
                           help='start or stop command')
+    opt_parser.add_option('--address',
+                          dest='address',
+                          default='',
+                          help='remote nebula-graph address')
     return opt_parser
 
 
 def start_nebula(nb, configs):
-    nb.install()
-    port = nb.start()
+    if configs.address is None:
+        nb.install()
+        host = 'localhost'
+        port = nb.start()
+    else:
+        host, port = configs.address.split(':')
+        port = int(port)
 
     # Load csv data
-    pool = get_conn_pool("localhost", port)
+    pool = get_conn_pool(host, port)
     sess = pool.get_session(configs.user, configs.password)
 
     if not os.path.exists(TMP_DIR):
@@ -76,7 +85,10 @@ def stop_nebula(nb):
     with open(NB_TMP_PATH, "r") as f:
         data = json.loads(f.readline())
         nb.set_work_dir(data["work_dir"])
-    nb.stop()
+
+    if configs.address is None:
+        nb.stop()
+
     shutil.rmtree(TMP_DIR, ignore_errors=True)
     print('nebula services have been stopped.')
 
@@ -103,4 +115,5 @@ if __name__ == "__main__":
     except Exception as x:
         print('\033[31m' + str(x) + '\033[0m')
         import traceback
+
         print(traceback.format_exc())

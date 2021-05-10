@@ -48,7 +48,7 @@ def init_parser():
 
 
 def start_nebula(nb, configs):
-    if configs.address is None:
+    if configs.address is None or configs.address == '':
         nb.install()
         host = 'localhost'
         port = nb.start()

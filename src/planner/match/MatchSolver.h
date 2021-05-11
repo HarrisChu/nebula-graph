@@ -11,7 +11,7 @@
 #include "common/expression/LabelAttributeExpression.h"
 #include "common/expression/LabelExpression.h"
 #include "context/QueryContext.h"
-#include "context/ast/QueryAstContext.h"
+#include "context/ast/CypherAstContext.h"
 #include "planner/Planner.h"
 
 namespace nebula {
@@ -35,12 +35,14 @@ public:
 
     static Expression* makeIndexFilter(const std::string& label,
                                        const MapExpression* map,
-                                       QueryContext* qctx);
+                                       QueryContext* qctx,
+                                       bool isEdgeProperties = false);
 
     static Expression* makeIndexFilter(const std::string& label,
                                        const std::string& alias,
                                        Expression* filter,
-                                       QueryContext* qctx);
+                                       QueryContext* qctx,
+                                       bool isEdgeProperties = false);
 
     static void extractAndDedupVidColumn(QueryContext* qctx,
                                          Expression* initialExpr,

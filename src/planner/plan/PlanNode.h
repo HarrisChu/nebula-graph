@@ -4,10 +4,9 @@
  * attached with Common Clause Condition 1.0, found in the LICENSES directory.
  */
 
-#ifndef PLANNER_PLANNODE_H_
-#define PLANNER_PLANNODE_H_
+#ifndef PLANNER_PLAN_PLANNODE_H_
+#define PLANNER_PLAN_PLANNODE_H_
 
-#include "common/base/Base.h"
 #include "common/expression/Expression.h"
 #include "common/graph/Response.h"
 #include "context/QueryContext.h"
@@ -144,12 +143,11 @@ public:
         kIngest,
     };
 
-    PlanNode(QueryContext* qctx, Kind kind);
-
-    virtual ~PlanNode() = default;
 
     // Describe plan node
     virtual std::unique_ptr<PlanNodeDescription> explain() const;
+
+    virtual PlanNode* clone() const = 0;
 
     virtual void calcCost();
 
@@ -248,11 +246,15 @@ public:
     }
 
 protected:
+    PlanNode(QueryContext* qctx, Kind kind);
+
+    virtual ~PlanNode() = default;
+
     static void addDescription(std::string key, std::string value, PlanNodeDescription* desc);
 
     void readVariable(const std::string& varname);
     void readVariable(Variable* varPtr);
-    void clone(const PlanNode &node) {
+    void cloneMembers(const PlanNode &node) {
         // TODO maybe shall copy cost_ and dependencies_ too
         inputVars_ = node.inputVars_;
         outputVars_ = node.outputVars_;
@@ -279,14 +281,18 @@ public:
         setDep(0, dep);
     }
 
+    PlanNode* clone() const override {
+        LOG(FATAL) << "Shouldn't call the unimplemented method";
+    }
+
 protected:
     SingleDependencyNode(QueryContext* qctx, Kind kind, const PlanNode* dep)
         : PlanNode(qctx, kind) {
         addDep(dep);
     }
 
-    void clone(const SingleDependencyNode &node) {
-        PlanNode::clone(node);
+    void cloneMembers(const SingleDependencyNode &node) {
+        PlanNode::cloneMembers(node);
     }
 
     std::unique_ptr<PlanNodeDescription> explain() const override;
@@ -296,9 +302,13 @@ class SingleInputNode : public SingleDependencyNode {
 public:
     std::unique_ptr<PlanNodeDescription> explain() const override;
 
+    PlanNode* clone() const override {
+        LOG(FATAL) << "Shouldn't call the unimplemented method";
+    }
+
 protected:
-    void clone(const SingleInputNode &node) {
-        SingleDependencyNode::clone(node);
+    void cloneMembers(const SingleInputNode &node) {
+        SingleDependencyNode::cloneMembers(node);
     }
 
     SingleInputNode(QueryContext* qctx, Kind kind, const PlanNode* dep)
@@ -311,7 +321,7 @@ protected:
     }
 };
 
-class BiInputNode : public PlanNode {
+class BinaryInputNode : public PlanNode {
 public:
     void setLeftDep(const PlanNode* left) {
         setDep(0, left);
@@ -345,13 +355,21 @@ public:
         return inputVars_[1]->name;
     }
 
+    PlanNode* clone() const override {
+        LOG(FATAL) << "Shouldn't call the unimplemented method";
+    }
+
     std::unique_ptr<PlanNodeDescription> explain() const override;
 
 protected:
-    BiInputNode(QueryContext* qctx, Kind kind, const PlanNode* left, const PlanNode* right);
+    BinaryInputNode(QueryContext* qctx, Kind kind, const PlanNode* left, const PlanNode* right);
+
+    void cloneMembers(const BinaryInputNode &node) {
+        PlanNode::cloneMembers(node);
+    }
 };
 
 }  // namespace graph
 }  // namespace nebula
 
-#endif  // PLANNER_PLANNODE_H_
+#endif  // PLANNER_PLAN_PLANNODE_H_

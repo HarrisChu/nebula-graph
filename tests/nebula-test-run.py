@@ -60,6 +60,9 @@ def start_nebula(nb, configs):
     pool = get_conn_pool(host, port)
     sess = pool.get_session(configs.user, configs.password)
 
+    # update heartbeat_interval_secs
+    sess.execute('update configs heartbeat_interval_secs=1')
+
     if not os.path.exists(TMP_DIR):
         os.mkdir(TMP_DIR)
 

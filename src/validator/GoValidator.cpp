@@ -12,7 +12,7 @@
 #include "common/expression/VariableExpression.h"
 #include "common/interface/gen-cpp2/storage_types.h"
 #include "parser/TraverseSentences.h"
-#include "planner/Logic.h"
+#include "planner/plan/Logic.h"
 #include "visitor/ExtractPropExprVisitor.h"
 
 namespace nebula {
@@ -96,8 +96,8 @@ Status GoValidator::validateYield(YieldClause* yield) {
         yields_ = newCols;
     } else {
         for (auto col : cols) {
-            NG_RETURN_IF_ERROR(invalidLabelIdentifiers(col->expr()));
             col->setExpr(ExpressionUtils::rewriteLabelAttr2EdgeProp(col->expr()));
+            NG_RETURN_IF_ERROR(invalidLabelIdentifiers(col->expr()));
 
             auto* colExpr = col->expr();
             if (graph::ExpressionUtils::findAny(colExpr, {Expression::Kind::kAggregate})) {
@@ -241,11 +241,13 @@ Status GoValidator::buildNStepsPlan() {
         loopBody = projectFromJoin;
     }
 
+    auto *condition = buildExpandCondition(gn->outputVar(), steps_.steps - 1);
+    qctx_->objPool()->add(condition);
     auto* loop = Loop::make(
         qctx_,
         projectLeftVarForJoin == nullptr ? dedupStartVid : projectLeftVarForJoin,   // dep
         loopBody,                                                                   // body
-        buildNStepLoopCondition(steps_.steps - 1));
+        condition);
 
     NG_RETURN_IF_ERROR(oneStep(loop, dedupDstVids->outputVar(), projectFromJoin));
     // reset tail_
@@ -364,11 +366,15 @@ Status GoValidator::buildMToNPlan() {
         dedupNode->setColNames(std::move(colNames_));
     }
 
+    PlanNode *body = dedupNode == nullptr ? projectResult : dedupNode;
+    auto *condition = buildExpandCondition(body->outputVar(),
+                                           steps_.mToN->nSteps);
+    qctx_->objPool()->add(condition);
     auto* loop = Loop::make(
         qctx_,
         projectLeftVarForJoin == nullptr ? dedupStartVid : projectLeftVarForJoin,   // dep
-        dedupNode == nullptr ? projectResult : dedupNode,                           // body
-        buildNStepLoopCondition(steps_.mToN->nSteps));
+        body,  // body
+        condition);
 
     if (projectStartVid_ != nullptr) {
         tail_ = projectStartVid_;

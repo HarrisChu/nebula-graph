@@ -371,7 +371,7 @@ Feature: Go Sentence
       """
       YIELD serve.start_year, like.likeness, serve._type, like._type
       """
-    Then a SemanticError should be raised at runtime: Not supported expression `serve.start_year' for props deduction.
+    Then a SemanticError should be raised at runtime: Invalid label identifiers: serve
     When executing query:
       """
       GO FROM "Russell Westbrook" OVER serve, like REVERSELY
@@ -1662,3 +1662,42 @@ Feature: Go Sentence
     Then the result should be, in any order, with relax comparison:
       | like._dst     |
       | "Tony Parker" |
+
+  Scenario: Step over end
+    When executing query:
+      """
+      GO 2 STEPS FROM "Tim Duncan" OVER serve;
+      """
+    Then the result should be, in any order:
+      | serve._dst |
+    When executing query:
+      """
+      GO 10 STEPS FROM "Tim Duncan" OVER serve;
+      """
+    Then the result should be, in any order:
+      | serve._dst |
+    When executing query:
+      """
+      GO 10000000000000 STEPS FROM "Tim Duncan" OVER serve;
+      """
+    Then the result should be, in any order:
+      | serve._dst |
+    When executing query:
+      """
+      GO 1 TO 10 STEPS FROM "Tim Duncan" OVER serve;
+      """
+    Then the result should be, in any order:
+      | serve._dst |
+      | "Spurs"    |
+    When executing query:
+      """
+      GO 2 TO 10 STEPS FROM "Tim Duncan" OVER serve;
+      """
+    Then the result should be, in any order:
+      | serve._dst |
+    When executing query:
+      """
+      GO 1000000000 TO 1000000002 STEPS FROM "Tim Duncan" OVER serve;
+      """
+    Then the result should be, in any order:
+      | serve._dst |

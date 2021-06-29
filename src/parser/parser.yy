@@ -86,6 +86,7 @@ static constexpr size_t kCommentLengthLimit = 256;
     nebula::YieldClause                    *yield_clause;
     nebula::YieldColumns                   *yield_columns;
     nebula::YieldColumn                    *yield_column;
+    nebula::TruncateClause                 *truncate_clause;
     nebula::VertexTagList                  *vertex_tag_list;
     nebula::VertexTagItem                  *vertex_tag_item;
     nebula::PropertyList                   *prop_list;
@@ -168,7 +169,7 @@ static constexpr size_t kCommentLengthLimit = 256;
 %token KW_GET KW_DECLARE KW_GRAPH KW_META KW_STORAGE
 %token KW_TTL KW_TTL_DURATION KW_TTL_COL KW_DATA KW_STOP
 %token KW_FETCH KW_PROP KW_UPDATE KW_UPSERT KW_WHEN
-%token KW_ORDER KW_ASC KW_LIMIT KW_OFFSET KW_ASCENDING KW_DESCENDING
+%token KW_ORDER KW_ASC KW_LIMIT KW_SAMPLE KW_OFFSET KW_ASCENDING KW_DESCENDING
 %token KW_DISTINCT KW_ALL KW_OF
 %token KW_BALANCE KW_LEADER KW_RESET KW_PLAN
 %token KW_SHORTEST KW_PATH KW_NOLOOP
@@ -243,6 +244,7 @@ static constexpr size_t kCommentLengthLimit = 256;
 %type <where_clause> where_clause
 %type <lookup_where_clause> lookup_where_clause
 %type <when_clause> when_clause
+%type <truncate_clause> truncate_clause
 %type <yield_clause> yield_clause
 %type <yield_columns> yield_columns
 %type <yield_column> yield_column
@@ -506,6 +508,7 @@ unreserved_keyword
     | KW_COMMENT            { $$ = new std::string("comment"); }
     | KW_SESSION            { $$ = new std::string("session"); }
     | KW_SESSIONS           { $$ = new std::string("sessions"); }
+    | KW_SAMPLE             { $$ = new std::string("sample"); }
     ;
 
 expression
@@ -526,7 +529,12 @@ expression
     | MINUS {
         scanner.setUnaryMinus(true);
     } expression %prec UNARY_MINUS {
-        $$ = new UnaryExpression(Expression::Kind::kUnaryNegate, $3);
+        if (scanner.isIntMin()) {
+            $$ = $3;
+            scanner.setIsIntMin(false);
+        } else {
+            $$ = new UnaryExpression(Expression::Kind::kUnaryNegate, $3);
+        }
         scanner.setUnaryMinus(false);
     }
     | PLUS expression %prec UNARY_PLUS {
@@ -1165,13 +1173,21 @@ map_item_list
     }
     ;
 
+truncate_clause
+    : %empty {
+        $$ = nullptr;
+    }
+    | KW_SAMPLE expression {
+        $$ = new TruncateClause($2, true);
+    }
+    | KW_LIMIT expression {
+        $$ = new TruncateClause($2, false);
+    }
+    ;
+
 go_sentence
-    : KW_GO step_clause from_clause over_clause where_clause yield_clause {
-        auto go = new GoSentence();
-        go->setStepClause($2);
-        go->setFromClause($3);
-        go->setOverClause($4);
-        go->setWhereClause($5);
+    : KW_GO step_clause from_clause over_clause where_clause yield_clause truncate_clause {
+        auto go = new GoSentence($2, $3, $4, $5, $7);
         if ($6 == nullptr) {
             auto *cols = new YieldColumns();
             if (!$4->isOverAll()) {
@@ -1932,34 +1948,31 @@ fetch_sentence
     ;
 
 find_path_sentence
-    : KW_FIND KW_ALL KW_PATH opt_with_properites from_clause to_clause over_clause find_path_upto_clause
-    /* where_clause */ {
+    : KW_FIND KW_ALL KW_PATH opt_with_properites from_clause to_clause over_clause where_clause find_path_upto_clause {
         auto *s = new FindPathSentence(false, $4, false);
         s->setFrom($5);
         s->setTo($6);
         s->setOver($7);
-        s->setStep($8);
-        /* s->setWhere($9); */
+        s->setWhere($8);
+        s->setStep($9);
         $$ = s;
     }
-    | KW_FIND KW_SHORTEST KW_PATH opt_with_properites from_clause to_clause over_clause find_path_upto_clause
-    /* where_clause */ {
+    | KW_FIND KW_SHORTEST KW_PATH opt_with_properites from_clause to_clause over_clause where_clause find_path_upto_clause {
         auto *s = new FindPathSentence(true, $4, false);
         s->setFrom($5);
         s->setTo($6);
         s->setOver($7);
-        s->setStep($8);
-        /* s->setWhere($9); */
+        s->setWhere($8);
+        s->setStep($9);
         $$ = s;
     }
-    | KW_FIND KW_NOLOOP KW_PATH opt_with_properites from_clause to_clause over_clause find_path_upto_clause
-    /* where_clause */ {
+    | KW_FIND KW_NOLOOP KW_PATH opt_with_properites from_clause to_clause over_clause where_clause find_path_upto_clause {
         auto *s = new FindPathSentence(false, $4, true);
         s->setFrom($5);
         s->setTo($6);
         s->setOver($7);
-        s->setStep($8);
-        /* s->setWhere($9) */
+        s->setWhere($8);
+        s->setStep($9);
         $$ = s;
     }
     ;
@@ -2022,8 +2035,8 @@ both_in_out_clause
     | KW_BOTH over_edges { $$ = new BothInOutClause($2, BoundClause::BOTH); }
 
 get_subgraph_sentence
-    : KW_GET KW_SUBGRAPH step_clause from_clause in_bound_clause out_bound_clause both_in_out_clause {
-        $$ = new GetSubgraphSentence($3, $4, $5, $6, $7);
+    : KW_GET KW_SUBGRAPH opt_with_properites step_clause from_clause in_bound_clause out_bound_clause both_in_out_clause {
+        $$ = new GetSubgraphSentence($3, $4, $5, $6, $7, $8);
     }
 
 use_sentence

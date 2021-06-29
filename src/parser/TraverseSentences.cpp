@@ -33,7 +33,10 @@ std::string GoSentence::toString() const {
         buf += " ";
         buf += yieldClause_->toString();
     }
-
+    if (truncateClause_ != nullptr) {
+        buf += " ";
+        buf += truncateClause_->toString();
+    }
     return buf;
 }
 
@@ -197,13 +200,13 @@ std::string FindPathSentence::toString() const {
         buf += over_->toString();
         buf += " ";
     }
+    if (where_ != nullptr) {
+        buf += where_->toString();
+        buf += " ";
+    }
     if (step_ != nullptr) {
         buf += "UPTO ";
         buf += step_->toString();
-        buf += " ";
-    }
-    if (where_ != nullptr) {
-        buf += where_->toString();
         buf += " ";
     }
     return buf;

@@ -271,6 +271,10 @@ public:
         }
     }
 
+    bool isVidType() {
+        return optType_ == OptionType::VID_TYPE;
+    }
+
     std::string toString() const;
 
 private:
@@ -293,6 +297,16 @@ public:
         return result;
     }
 
+    bool hasVidType() const {
+        auto spaceOptItems = getOpts();
+        for (SpaceOptItem* item : spaceOptItems) {
+            if (item->isVidType()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     std::string toString() const;
 
 private:
@@ -311,6 +325,10 @@ public:
         return spaceName_.get();
     }
 
+    const std::string* groupName() const {
+        return groupName_.get();
+    }
+
     void setOpts(SpaceOptList* spaceOpts) {
         spaceOpts_.reset(spaceOpts);
     }
@@ -319,8 +337,8 @@ public:
         groupName_.reset(name);
     }
 
-    const std::string* groupName() const {
-        return groupName_.get();
+    const SpaceOptList* spaceOpts() const {
+        return spaceOpts_.get();
     }
 
     void setComment(std::string *name) {

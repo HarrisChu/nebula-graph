@@ -198,6 +198,32 @@ private:
     bool                                          isOverAll_{false};
 };
 
+class TruncateClause {
+public:
+    TruncateClause(Expression* expr, bool isSample) {
+        truncate_.reset(expr);
+        isSample_ = isSample;
+    }
+
+    Expression* truncate() const {
+        return truncate_.get();
+    }
+
+    std::unique_ptr<TruncateClause> clone() const {
+        return std::make_unique<TruncateClause>(truncate_->clone().release(), isSample_);
+    }
+
+    bool isSample() const {
+        return isSample_;
+    }
+
+    std::string toString() const;
+
+private:
+    bool isSample_{false};
+    std::unique_ptr<Expression> truncate_;
+};
+
 class WhereClause {
 public:
     explicit WhereClause(Expression *filter) {
@@ -284,6 +310,15 @@ public:
         auto get = [] (auto &column) { return column.get(); };
         std::transform(columns_.begin(), columns_.end(), result.begin(), get);
         return result;
+    }
+
+    std::vector<std::string> names() const {
+        std::vector<std::string> names;
+        names.reserve(columns_.size());
+        for (auto &col : columns_) {
+            names.emplace_back(col->name());
+        }
+        return names;
     }
 
     size_t size() const {

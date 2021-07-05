@@ -82,25 +82,14 @@ private:
 
 class LookupSentence final : public Sentence {
 public:
-    explicit LookupSentence(std::string *from) {
-        from_.reset(from);
-        kind_ = Kind::kLookup;
-    }
+    LookupSentence(std::string* from, WhereClause* where, YieldClause* yield);
 
-    const std::string* from() const {
-        return from_.get();
-    }
-
-    void setWhereClause(WhereClause *whereClause) {
-        whereClause_.reset(whereClause);
+    const std::string& from() const {
+        return *from_;
     }
 
     const WhereClause* whereClause() const {
         return whereClause_.get();
-    }
-
-    void setYieldClause(YieldClause *clause) {
-        yieldClause_.reset(clause);
     }
 
     const YieldClause* yieldClause() const {
@@ -226,22 +215,19 @@ private:
 
 class OrderFactor final {
 public:
-    enum OrderType : uint8_t {
-        ASCEND,
-        DESCEND
-    };
+    enum OrderType : uint8_t { ASCEND, DESCEND };
 
-    OrderFactor(Expression *expr, OrderType op) {
-        expr_.reset(expr);
+    OrderFactor(Expression* expr, OrderType op) {
+        expr_ = expr;
         orderType_ = op;
     }
 
     Expression* expr() {
-        return expr_.get();
+        return expr_;
     }
 
-    void setExpr(Expression *expr) {
-        expr_.reset(expr);
+    void setExpr(Expression* expr) {
+        expr_ = expr;
     }
 
     OrderType orderType() {
@@ -251,8 +237,8 @@ public:
     std::string toString() const;
 
 private:
-    std::unique_ptr<Expression>                 expr_;
-    OrderType                                   orderType_;
+    Expression* expr_{nullptr};
+    OrderType orderType_;
 };
 
 class OrderFactors final {
